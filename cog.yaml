@@ -1,0 +1,16 @@
+build:
+  gpu: true
+  cuda: "11.8"
+  python_version: "3.10"
+  system_packages:
+    - "libgl1-mesa-glx"
+    - "libglib2.0-0"
+  python_packages:
+    - "Pillow==10.0.0"
+    - "safetensors==0.3.3"
+    - "tqdm==4.66.1"
+    - "open_clip_torch==2.20.0"
+    - "accelerate==0.22.0"
+    - "transformers==4.33.1"
+
+predict: "predict.py:Predictor"
