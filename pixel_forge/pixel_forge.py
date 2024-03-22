@@ -20,6 +20,7 @@ class PixelForge():
 
 	def load_caption_model(self):
 		logging.info(f"Loading caption model {self.config.caption_model_name}...")
+		start_time = time.time()
 		model_path = CAPTION_MODELS[self.config.caption_model_name]
 
 		if self.config.caption_model_name.startswith('blip2-'):
@@ -30,6 +31,8 @@ class PixelForge():
 		self.caption_processor = AutoProcessor.from_pretrained(model_path)
 		caption_model.eval()
 		self.caption_model = caption_model
+		end_time = time.time()
+		logging.info(f"Loaded caption model in {end_time-start_time:.2f} seconds.")
 
 	def load_clip_model(self):
 		logging.info(f"Loading CLIP model {config.clip_model_name}...")
@@ -50,4 +53,4 @@ class PixelForge():
 		# TODO: load prompt helpers.
 
 		end_time = time.time()
-		logging.info(f"Loaded CLIP model and data in {end_time-start_time:.2f} seconds.")
+		logging.info(f"Loaded CLIP model and prompt helpers in {end_time-start_time:.2f} seconds.")
