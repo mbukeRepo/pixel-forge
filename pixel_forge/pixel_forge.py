@@ -3,6 +3,7 @@ from config import Config, CAPTION_MODELS
 import logging
 import open_clip
 import time
+from typing import List
 
 logging.basicConfig(
 	level=logging.DEBUG,
@@ -50,7 +51,61 @@ class PixelForge():
             	self.clip_model.eval()
 		# clip tokenizer
 		self.tokenize = open_clip.get_tokenizer(clip_model_name)
-		# TODO: load prompt helpers.
+
+		# load popular image sharing platforms
+		platforms = [
+			'dribbble', 'flickr', 'instagram', 'pexels', 'pinterest', 'pixabay', 'pixiv', 'polycount', 'reddit', 'shutterstock', 'tumblr', 'unsplash', 'zbrush central'
+		]
+
+		trending_list = [platform for platform in platforms]
+		trending_list.extend([f"trending on {site}" for site in platforms])
+		trending_list.extend([f"featured on {site}" for site in platforms])
+
+		# loading artists
+		raw_artists = load_list(config.data_path, "artists.txt")
+		artists = [f"by {artist}" for artist in raw_artists]
+		artists.extend([f"inspired by {artist}" for artist in raw_artists])
+
+		# preparing clip model
+		self.clip_model = self.clip_model.to(self.device)
+
+		self.artists = []
+		self.flavors = []
+		self.mediums = []
+		self.movements = []
+		self.trendings = []
+		self.negative = []
 
 		end_time = time.time()
 		logging.info(f"Loaded CLIP model and prompt helpers in {end_time-start_time:.2f} seconds.")
+
+
+class LabelTable():
+	def __init__(self, labels: List[str], interrogator: PixelForge):
+		clip_model, config = interrogator.clip_model, interrogator.config
+		self.chunk_size = config.chunk_size
+		self.config = config
+		self.device = config.device
+		self.embeddings = []
+		self.labels = labels
+		self.tokenize = interrogator.tokenize
+
+		hash = hashlib.sha256(",".join(labels).encode()).hexdigest()
+		sanitized_name = self.config.clip_model_name.replace('/', '_').replace('@', '_')
+
+	def _load_cached(self, desc: str, hash: str, interrogator: PixelForge):
+		pass
+
+	def _rank(self, image_features: torch.Tensor, text_embeds: torch.Tensor, top_count: int = 1, reverse: bool = False):
+		pass
+
+	def rank(self, image_features: torch.Tensor, top_count: int = 1, reverse: bool = False):
+		if len(self.labels) <= self.chunk_size:
+			tops = self._rank(
+				image_features,
+				self.embeddings,
+				top_count = top_count,
+				reverse = reverse
+			)
+
+
