@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 torch>=1.13.0
 torchvision
 Pillow
@@ -8,7 +7,4 @@ tqdm
 open_clip_torch
 accelerate
 transformers>=4.27.1
-=======
-pip~=21.2.4
-wheel~=0.37.0
->>>>>>> 27fda73 (feat: add requirements file)
+
