@@ -9,7 +9,7 @@ from utils import load_list
 from transformers import AutoProcessor, Blip2ForConditionalGeneration, BlipForConditionalGeneration
 from PIL import Image
 import os
-from utils import download_file, load_list
+from utils import download_file, load_list, prompt_at_max_len
 
 from safetensors.numpy import load_file
 import numpy as np
@@ -113,22 +113,109 @@ class PixelForge:
 
         return image_features
 
+    def chain(
+            self,
+            image_features: torch.Tensor,
+            phrases: List[str],
+            best_prompt: str = "",
+            best_sim: float = 0,
+            min_count: int = 8,
+            max_count: int = 32,
+            desc="Chaining",
+            reverse: bool = False
+    ) -> str:
+        self.clip_model = self.clip_model.to(self.config.device)
+        phrases = set(phrases)
+        if not best_prompt:
+            best_prompt = self.rank_top(image_features, [f for f in phrases], reverse=reverse)
+            best_sim = self.similarity(image_features, best_prompt)
+            phrases.remove(best_prompt)
+        curr_prompt, curr_sim = best_prompt, best_sim
+
+        def check(addition: str, idx: int) -> bool:
+            nonlocal best_prompt, best_sim, curr_prompt, curr_sim
+            prompt = curr_prompt + ", " + addition
+            sim = self.similarity(image_features, prompt)
+            if reverse:
+                sim = -sim
+
+            if sim > best_sim:
+                best_prompt, best_sim = prompt, sim
+            if sim > curr_sim or idx < min_count:
+                curr_prompt, curr_sim = prompt, sim
+                return True
+            return False
+
+        for idx in tqdm(range(max_count), desc=desc, disable=self.config.quiet):
+            best = self.rank_top(image_features, [f"{curr_prompt}, {f}" for f in phrases], reverse=reverse)
+            flave = best[len(curr_prompt) + 2:]
+            if not check(flave, idx):
+                break
+            if prompt_at_max_len(curr_prompt, self.tokenize):
+                break
+            phrases.remove(flave)
+
+        return best_prompt
+
     def interrogate(self, image: Image, min_flavors: int = 8, max_flavors: int = 32,
                     caption: Optional[str] = None) -> str:
-        pass
+        if caption is None:
+            caption = self.generate_caption(image)
+
+        image_features = self.image_to_features(image)
+        # merge label tables
+        new_table = LabelTable([], None, self)
+        for table in [self.artists, self.flavors, self.mediums, self.movements, self.trendings]:
+            new_table.labels.extend(table.labels)
+            new_table.embeddings.extend(table.embeddings)
+        phrases = new_table.rank(image_features, top_count=self.config.flavor_intermediate_count)
+
+        best_prompt, best_sim = caption, self.similarity(image_features, caption)
+        best_prompt = self.chain(
+            image_features,
+            phrases,
+            best_prompt,
+            best_sim,
+            min_flavors,
+            max_flavors,
+            desc="Flavor chain"
+        )
+        # warn: less readable interrogate TODO: improve with more variations
+        candidates = [caption, best_prompt]
+        return candidates[np.argmax(self.similarities(image_features, candidates))]
 
     def rank_top(self, image_features: torch.Tensor, text_array: List[str], reverse: bool = False) -> str:
-        pass
+        self.clip_model = self.clip_model.to(self.config.device)
+        text_tokens = self.tokenize([text for text in text_array]).to(self.config.device)
+        with torch.no_grad(), torch.cuda.amp.autocast():
+            text_features = self.clip_model.encode_text(text_tokens)
+            text_features /= text_features.norm(dim=-1, keepdim=True)
+            similarity = text_features @ image_features.T
+            if reverse:
+                similarity = -similarity
+        return text_array[similarity.argmax().item()]
 
     def similarity(self, image_features: torch.Tensor, text: str) -> float:
-        pass
+        self.clip_model = self.clip_model.to(self.config.device)
+        text_tokens = self.tokenize([text]).to(self.config.device)
+        with torch.no_grad(), torch.cuda.amp.autocast():
+            text_features = self.clip_model.encode_text(text_tokens)
+            text_features /= text_features.norm(dim=-1, keepdim=True)
+            similarity = text_features @ image_features.T
+        return similarity[0][0].item()
 
     def similarities(self, image_features: torch.Tensor, text_array: List[str]) -> List[float]:
-        pass
+        self.clip_model = self.clip_model.to(self.config.device)
+        text_tokens = self.tokenize([text for text in text_array]).to(self.config.device)
+        with torch.no_grad(), torch.cuda.amp.autocast():
+            text_features = self.clip_model.encode_text(text_tokens)
+            text_features /= text_features.norm(dim=-1, keepdim=True)
+            similarity = text_features @ image_features.T
+        return similarity.T[0].tolist()
 
 
 class LabelTable:
-    def __init__(self, labels: List[str], desc: str, interrogator: PixelForge):
+    def __init__(self, labels: List[str], desc: Optional[str], interrogator: PixelForge):
         clip_model, config = interrogator.clip_model, interrogator.config
         self.chunk_size = config.chunk_size
         self.config = config
