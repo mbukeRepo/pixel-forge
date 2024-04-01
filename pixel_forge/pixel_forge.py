@@ -3,10 +3,11 @@ from config import Config, CAPTION_MODELS
 import logging
 import open_clip
 import time
-from typing import List
+from typing import List, Optional
 import hashlib
 from utils import load_list
 from transformers import AutoProcessor, Blip2ForConditionalGeneration, BlipForConditionalGeneration
+from PIL import Image
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -21,7 +22,8 @@ class PixelForge:
         self.caption_model = None
         self.caption_processor = None
         self.config = config
-        self.dtype = torch.float16 if self.config.device == 'cuda' else torch.float32  # TODO: revise more on the appropriate dtype
+        self.dtype = torch.float16 if self.config.device == 'cuda' else torch.float32  # TODO: revise more on the
+        # appropriate dtype
 
         # loading caption and clip models
         self.load_caption_model()
@@ -88,6 +90,24 @@ class PixelForge:
         end_time = time.time()
         logging.info(f"Loaded CLIP model and prompt helpers in {end_time - start_time:.2f} seconds.")
 
+    def generate_caption(self, image: Image):
+        pass
+
+    def image_to_features(self, image: Image):
+        pass
+
+    def interrogate(self, image: Image, min_flavors: int = 8, max_flavors: int = 32, caption: Optional[str] = None) -> str:
+        pass
+
+    def rank_top(self, image_features: torch.Tensor, text_array: List[str], reverse: bool = False) -> str:
+        pass
+
+    def similarity(self, image_features: torch.Tensor, text: str) -> float:
+        pass
+
+    def similarities(self, image_features: torch.Tensor, text_array: List[str]) -> List[float]:
+        pass
+
 
 class LabelTable:
     def __init__(self, labels: List[str], interrogator: PixelForge):
@@ -109,10 +129,4 @@ class LabelTable:
         pass
 
     def rank(self, image_features: torch.Tensor, top_count: int = 1, reverse: bool = False):
-        if len(self.labels) <= self.chunk_size:
-            tops = self._rank(
-                image_features,
-                self.embeddings,
-                top_count=top_count,
-                reverse=reverse
-            )
+        pass

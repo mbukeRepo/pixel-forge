@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import os
 import torch
-from typing import Optional
+from typing import Optional, List
 
 # available caption models
 CAPTION_MODELS = {
@@ -36,4 +36,6 @@ class Config:
     device = "cuda" if torch.cuda.is_available() else "cpu"
     flavor_intermediate_count: int = 2048
 
-# TODO: apply low vram
+
+def list_caption_models() -> List[str]:
+    return list(CAPTION_MODELS.keys())
