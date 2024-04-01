@@ -104,7 +104,14 @@ class PixelForge:
         return self.caption_processor.batch_decode(tokens, skip_special_tokens=True)[0].strip()
 
     def image_to_features(self, image: Image):
-        pass
+        self.clip_model = self.clip_model.to(self.config.device)
+        images = self.clip_preprocess(image).unsqueeze(0).to(self.config.device)
+
+        with torch.no_grad(), torch.cuda.amp.autocast():
+            image_features = self.clip_model.encode_image(images)
+            image_features /= image_features.norm(dim=-1, keepdim=True)
+
+        return image_features
 
     def interrogate(self, image: Image, min_flavors: int = 8, max_flavors: int = 32,
                     caption: Optional[str] = None) -> str:
