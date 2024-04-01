@@ -28,7 +28,6 @@ class PixelForge:
     def __init__(self, config: Config):
         self.config = config
         self.dtype = torch.float16 if self.config.device == 'cuda' else torch.float32  # TODO: revise more on the
-        # appropriate dtype
 
         # loading caption and clip models
         self.load_caption_model()
@@ -97,7 +96,12 @@ class PixelForge:
         logging.info(f"Loaded CLIP model and prompt helpers in {end_time - start_time:.2f} seconds.")
 
     def generate_caption(self, image: Image):
-        pass
+        self.caption_model = self.caption_model.to(self.config.device)
+
+        inputs = self.caption_processor(images=image, return_tensors="pt").to(self.config.device)
+        tokens = self.caption_model.generate(**inputs, max_new_tokens=self.config.caption_max_length)
+
+        return self.caption_processor.batch_decode(tokens, skip_special_tokens=True)[0].strip()
 
     def image_to_features(self, image: Image):
         pass
