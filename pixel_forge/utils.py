@@ -1,7 +1,15 @@
+import time
 from typing import Optional, List
 import os
 import requests
 from tqdm import tqdm
+import logging
+
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(name)s - %(levelname)s - %(message)s'
+)
 
 
 def load_list(data_path: str, filename: Optional[str] = None) -> List[str]:
@@ -28,17 +36,27 @@ def truncate_to_fit(text: str, tokenize) -> str:
     return new_text
 
 
-def download_file(url: str, filepath: str, chunk_size: int = 4 * 1024 * 1024, quiet: bool = False):
+def download_file(url: str, filepath: str, chunk_size: int = 4 * 1024 * 1024):
     r = requests.get(url, stream=True)
+    logging.info(f'Downloading {url} to {filepath}')
+    start = time.time()
+
+    if os.path.exists(filepath):
+        os.remove(filepath)
+
     if r.status_code != 200:
         return
 
     file_size = int(r.headers.get("Content-Length", 0))
     filename = url.split("/")[-1]
-    progress = tqdm(total=file_size, unit="B", unit_scale=True, desc=filename, disable=quiet)
+    progress = tqdm(total=file_size, unit="B", unit_scale=True, desc=filename)
     with open(filepath, "wb") as f:
         for chunk in r.iter_content(chunk_size=chunk_size):
             if chunk:
                 f.write(chunk)
                 progress.update(len(chunk))
     progress.close()
+
+    end = time.time()
+    logging.info(f'Downloaded {url} in {end - start:.2f} seconds')
+

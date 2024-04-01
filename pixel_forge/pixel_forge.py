@@ -8,19 +8,22 @@ import hashlib
 from utils import load_list
 from transformers import AutoProcessor, Blip2ForConditionalGeneration, BlipForConditionalGeneration
 from PIL import Image
+import os
+from utils import download_file, load_list
+
+from safetensors.numpy import load_file
+import numpy as np
 
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(name)s - %(levelname)s - %(message)s'
 )
 
+CACHE_BASE_URL = 'https://huggingface.co/pharmapsychotic/ci-preprocess/resolve/main/'
+
 
 class PixelForge:
     def __init__(self, config: Config):
-        self.tokenize = None
-        self.clip_preprocess = None
-        self.caption_model = None
-        self.caption_processor = None
         self.config = config
         self.dtype = torch.float16 if self.config.device == 'cuda' else torch.float32  # TODO: revise more on the
         # appropriate dtype
@@ -64,8 +67,9 @@ class PixelForge:
 
         # load popular image sharing platforms
         platforms = [
-            'dribbble', 'flickr', 'instagram', 'pexels', 'pinterest', 'pixabay', 'pixiv', 'polycount', 'reddit',
-            'shutterstock', 'tumblr', 'unsplash', 'zbrush central'
+            'Artstation', 'behance', 'cg society', 'cgsociety', 'deviantart', 'dribbble',
+            'flickr', 'instagram', 'pexels', 'pinterest', 'pixabay', 'pixiv', 'polycount',
+            'reddit', 'shutterstock', 'tumblr', 'unsplash', 'zbrush central'
         ]
 
         trending_list = [platform for platform in platforms]
@@ -80,12 +84,12 @@ class PixelForge:
         # preparing clip model
         self.clip_model = self.clip_model.to(self.config.device)
 
-        self.artists = []
-        self.flavors = []
-        self.mediums = []
-        self.movements = []
-        self.trendings = []
-        self.negative = []
+        self.artists = LabelTable(artists, "artists", self)
+        self.flavors = LabelTable(load_list(self.config.prompt_helpers_path, 'flavors.txt'), "flavors", self)
+        self.mediums = LabelTable(load_list(self.config.prompt_helpers_path, 'mediums.txt'), "mediums", self)
+        self.movements = LabelTable(load_list(self.config.prompt_helpers_path, 'movements.txt'), "movements", self)
+        self.trendings = LabelTable(trending_list, "trendings", self)
+        self.negative = LabelTable(load_list(self.config.prompt_helpers_path, 'negative.txt'), "negative", self)
 
         end_time = time.time()
         logging.info(f"Loaded CLIP model and prompt helpers in {end_time - start_time:.2f} seconds.")
@@ -96,7 +100,8 @@ class PixelForge:
     def image_to_features(self, image: Image):
         pass
 
-    def interrogate(self, image: Image, min_flavors: int = 8, max_flavors: int = 32, caption: Optional[str] = None) -> str:
+    def interrogate(self, image: Image, min_flavors: int = 8, max_flavors: int = 32,
+                    caption: Optional[str] = None) -> str:
         pass
 
     def rank_top(self, image_features: torch.Tensor, text_array: List[str], reverse: bool = False) -> str:
@@ -110,7 +115,7 @@ class PixelForge:
 
 
 class LabelTable:
-    def __init__(self, labels: List[str], interrogator: PixelForge):
+    def __init__(self, labels: List[str], desc: str, interrogator: PixelForge):
         clip_model, config = interrogator.clip_model, interrogator.config
         self.chunk_size = config.chunk_size
         self.config = config
@@ -119,11 +124,38 @@ class LabelTable:
         self.labels = labels
         self.tokenize = interrogator.tokenize
 
-        hash = hashlib.sha256(",".join(labels).encode()).hexdigest()
-        sanitized_name = self.config.clip_model_name.replace('/', '_').replace('@', '_')
+        hash_str = hashlib.sha256(",".join(labels).encode()).hexdigest()
+        self.sanitized_name = self.config.clip_model_name.replace('/', '_').replace('@', '_')
+        self.load_checkpoints(desc=desc, hash_str=hash_str)
 
-    def _load_cached(self, desc: str, hash_str: str, interrogator: PixelForge):
-        pass
+    def load_checkpoints(self, desc: str, hash_str: str):
+        """
+          Loads the checkpoints and initialize the embedding table,
+          :param desc: description of the checkpoints
+          :param hash_str: hash of the label keywords
+        """
+        cached_safetensors = os.path.join(self.config.cache_path, f"{self.sanitized_name}_{desc}.safetensors")
+
+        if not os.path.exists(cached_safetensors):
+            download_url = CACHE_BASE_URL + cached_safetensors
+            try:
+                os.makedirs(os.path.dirname(cached_safetensors), exist_ok=True)
+                download_file(download_url, download_url)
+            except Exception as e:
+                logging.error(f'failed to download {download_url}')
+                logging.error(f'error message: {e}')
+        try:
+            tensors = load_file(cached_safetensors)
+            if 'hash' in tensors and 'embeds' in tensors:
+                if np.array_equal(tensors['hash'], np.array([ord(c) for c in hash_str], dtype=np.int8)):
+                    self.embeddings = tensors['embeds']
+                    if len(self.embeddings.shape) == 2:
+                        self.embeddings = [self.embeddings[i] for i in range(self.embeddings.shape[0])]
+                    return True
+        except Exception as e:
+            logging.error(f'error loading {cached_safetensors}')
+            logging.error(f'error message: {e}')
+
 
     def _rank(self, image_features: torch.Tensor, text_embeds: torch.Tensor, top_count: int = 1, reverse: bool = False):
         pass

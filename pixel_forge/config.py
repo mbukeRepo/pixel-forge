@@ -30,7 +30,7 @@ class Config:
     clip_offload: bool = False
 
     # pixel-forge settings
-    cache_path = "cache"  # where to store the text embeddings
+    cache_path = "cache"
     chunk_size = 2048  # batch size for CLIP! use smaller for low RAM consumption
     prompt_helpers_path = os.path.join(os.path.dirname(__file__), 'prompt_helpers')  # prompt helpers
     device = "cuda" if torch.cuda.is_available() else "cpu"
