@@ -13,6 +13,8 @@ from utils import download_file, load_list
 
 from safetensors.numpy import load_file
 import numpy as np
+from tqdm import tqdm
+import math
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -156,9 +158,31 @@ class LabelTable:
             logging.error(f'error loading {cached_safetensors}')
             logging.error(f'error message: {e}')
 
+    def _rank(self, image_features: torch.Tensor, text_embeds: torch.Tensor, top_count: int=1, reverse: bool=False) -> List[str]:
+        top_count = min(top_count, len(text_embeds))
+        text_embeds = torch.stack([torch.from_numpy(t) for t in text_embeds]).to(self.device)
+        with torch.cuda.amp.autocast():
+            similarity = image_features @ text_embeds.T
+            if reverse:
+                similarity = -similarity
+        _, top_labels = similarity.float().cpu().topk(top_count, dim=-1)
+        return [top_labels[0][i].numpy() for i in range(top_count)]
 
-    def _rank(self, image_features: torch.Tensor, text_embeds: torch.Tensor, top_count: int = 1, reverse: bool = False):
-        pass
+    def rank(self, image_features: torch.Tensor, top_count: int = 1, reverse: bool = False) -> List[str]:
+        if len(self.labels) <= self.chunk_size:
+            tops = self._rank(image_features, self.embeddings, top_count=top_count, reverse=reverse)
+            return [self.labels[i] for i in tops]
 
-    def rank(self, image_features: torch.Tensor, top_count: int = 1, reverse: bool = False):
-        pass
+        num_chunks = int(math.ceil(len(self.labels)/self.chunk_size))
+        keep_per_chunk = int(self.chunk_size / num_chunks)
+
+        top_labels, top_embeds = [], []
+        for chunk_idx in tqdm(range(num_chunks)):
+            start = chunk_idx*self.chunk_size
+            stop = min(start+self.chunk_size, len(self.embeddings))
+            tops = self._rank(image_features, self.embeddings[start:stop], top_count=keep_per_chunk, reverse=reverse)
+            top_labels.extend([self.labels[start + i] for i in tops])
+            top_embeds.extend([self.embeddings[start + i] for i in tops])
+
+        tops = self._rank(image_features, top_embeds, top_count=top_count)
+        return [top_labels[i] for i in tops]
