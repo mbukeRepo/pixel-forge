@@ -1,20 +1,20 @@
-import torch
-from config import Config, CAPTION_MODELS
+import hashlib
 import logging
-import open_clip
+import math
+import os
 import time
 from typing import List, Optional
-import hashlib
-from utils import load_list
-from transformers import AutoProcessor, Blip2ForConditionalGeneration, BlipForConditionalGeneration
-from PIL import Image
-import os
-from utils import download_file, load_list, prompt_at_max_len
 
-from safetensors.numpy import load_file
 import numpy as np
+import open_clip
+import torch
+from PIL import Image
+from safetensors.numpy import load_file
 from tqdm import tqdm
-import math
+from transformers import AutoProcessor, Blip2ForConditionalGeneration, BlipForConditionalGeneration
+
+from config import Config, CAPTION_MODELS
+from utils import download_file, load_list, prompt_at_max_len
 
 logging.basicConfig(
     level=logging.DEBUG,
