@@ -28,7 +28,6 @@ The `Config` object lets you configure CLIP Interrogator's processing.
 * `cache_path`: path where to save precomputed text embeddings
 * `download_cache`: when True will download the precomputed embeddings from huggingface
 * `chunk_size`: batch size for CLIP, use smaller for lower VRAM
-* `quiet`: when True no progress bars or text output will be displayed
 
 
 
